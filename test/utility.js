@@ -33,7 +33,7 @@
       var done = assert.async();
       var fs = require('fs');
       var vm = require('vm');
-      var filename = __dirname + '/../underscore.js';
+      var filename = __dirname + '/../underscore-umd.js';
       fs.readFile(filename, function(err, content){
         var sandbox = vm.createScript(
           content + 'this.underscore = this._.noConflict();',
@@ -51,7 +51,7 @@
 
   if (typeof require == 'function') {
     QUnit.test('Legacy Node API', function(assert) {
-      var filename = __dirname + '/../underscore.js';
+      var filename = __dirname + '/../underscore-umd.js';
       var resolved = require(filename);
       assert.strictEqual(resolved, resolved._);
     });
@@ -77,6 +77,13 @@
   QUnit.test('noop', function(assert) {
     assert.strictEqual(_.noop('curly', 'larry', 'moe'), void 0, 'should always return undefined');
   });
+
+  QUnit.test('toPath', function(assert) {
+    var key = 'xyz';
+    var path = [key];
+    assert.deepEqual(_.toPath(key), path, 'bare strings are wrapped in a single-element array');
+    assert.strictEqual(_.toPath(path), path, 'arrays are returned untouched');
+  })
 
   QUnit.test('random', function(assert) {
     var array = _.range(1000);
@@ -456,6 +463,31 @@
     assert.expect(1);
     var template = _.template('<<\nx\n>>', null, {evaluate: /<<(.*?)>>/g});
     assert.strictEqual(template(), '<<\nx\n>>');
+  });
+
+  QUnit.test('#2911 - _.templateSettings.variable must not allow third parties to inject code.', function(assert) {
+    QUnit.holyProperty = 'holy';
+    var invalidVariableNames = [
+      // CVE-2021-23337 (not applicable to Underscore)
+      '){delete QUnit.holyProperty}; with(obj',
+      '(x = QUnit.holyProperty = "evil"), obj',
+      'document.write("got you!")',
+      // CVE-2021-23358 (our actual security leak, which we fixed)
+      'a = (function() { delete QUnit.holyProperty; }())',
+      'a = (QUnit.holyProperty = "evil")',
+      'a = document.write("got you!")'
+    ];
+    _.each(invalidVariableNames, function(name) {
+      _.templateSettings.variable = name;
+      assert.throws(function() {
+        _.template('')();
+      }, 'code injection through _.templateSettings.variable: ' + name);
+      delete _.templateSettings.variable;
+    });
+    var holy = QUnit.holyProperty;
+    delete QUnit.holyProperty;
+    assert.strictEqual(holy, 'holy', '_.template variable cannot touch global state');
+    assert.ok(_.isUndefined(_.templateSettings.variable), 'cleanup');
   });
 
 }());

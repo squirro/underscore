@@ -6,4 +6,6 @@ node_modules
 nyc_output
 coverage
 test-treeshake/*-umd.js
-docs/underscore.js
+amd
+cjs
+/underscore-node-*-pre*
